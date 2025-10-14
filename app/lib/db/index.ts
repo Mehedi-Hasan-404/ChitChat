@@ -11,9 +11,12 @@ let dbService: ChatService;
 if (chatProvider === 'supabase') {
   console.log("Using Supabase as a backend.");
   dbService = supabaseService;
-} else {
+} else if (chatProvider === 'firebase') {
   console.log("Using Firebase as a backend.");
   dbService = firebaseService;
+} else {
+  console.log("No chat provider specified, defaulting to Supabase.");
+  dbService = supabaseService;
 }
 
 export { dbService };
