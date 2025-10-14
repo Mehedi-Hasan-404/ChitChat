@@ -28,14 +28,26 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
   const [status, setStatus] = useState<'connecting' | 'connected' | 'error'>('connecting');
   const [isTyping, setIsTyping] = useState(false);
   const [typingTimeout, setTypingTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [isClient, setIsClient] = useState(false);
   
+  // Check if we're on the client side
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
   // Load user profile from localStorage on initial load
   useEffect(() => {
+    if (!isClient) return;
+
     try {
       const savedName = localStorage.getItem('userName');
       const savedPic = localStorage.getItem('profilePic') || '';
-      const sessionId = localStorage.getItem('sessionId') || `session_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-      localStorage.setItem('sessionId', sessionId);
+      let sessionId = localStorage.getItem('sessionId');
+      
+      if (!sessionId) {
+        sessionId = `session_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+        localStorage.setItem('sessionId', sessionId);
+      }
 
       if (savedName) {
         const loadedUser = { name: savedName, pic: savedPic, sessionId };
@@ -45,11 +57,11 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
     } catch (error) {
       console.error("Could not access localStorage:", error);
     }
-  }, []);
+  }, [isClient]);
 
   // Initialize database connection and listeners when user is set
   useEffect(() => {
-    if (!user) return;
+    if (!user || !isClient) return;
 
     try {
       dbService.init(
@@ -65,11 +77,17 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
     }
 
     return () => dbService.cleanup();
-  }, [user]);
+  }, [user, isClient]);
 
   const saveUserProfile = useCallback((name: string, pic: string) => {
+    if (!isClient) return;
+
     try {
-      const sessionId = localStorage.getItem('sessionId')!;
+      let sessionId = localStorage.getItem('sessionId');
+      if (!sessionId) {
+        sessionId = `session_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+        localStorage.setItem('sessionId', sessionId);
+      }
       const newUser = { name, pic, sessionId };
       localStorage.setItem('userName', name);
       localStorage.setItem('profilePic', pic);
@@ -77,7 +95,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
     } catch (error) {
       console.error("Could not access localStorage:", error);
     }
-  }, []);
+  }, [isClient]);
   
   const sendMessage = useCallback((text: string) => {
     if (!user || text.trim() === '') return;
