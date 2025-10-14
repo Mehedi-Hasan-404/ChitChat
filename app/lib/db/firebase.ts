@@ -37,7 +37,7 @@ export const firebaseService: ChatService = {
     onValue(presenceRef, (snapshot) => {
         const presenceData = snapshot.val();
         const usersArray: OnlineUser[] = presenceData
-            ? Object.entries(presencedata).map(([sessionId, user]: [string, any]) => ({ sessionId, name: user.name }))
+            ? Object.entries(presenceData).map(([sessionId, user]: [string, any]) => ({ sessionId, name: user.name }))
             : [];
         onOnlineUsers(usersArray);
     });
