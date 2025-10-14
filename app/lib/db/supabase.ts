@@ -56,7 +56,7 @@ export const supabaseService: ChatService = {
     // Listen for typing status
     typingChannel = supabase.channel('typing');
     typingChannel
-      .on('broadcast', { event: 'typing' }, ({ payload }) => {
+      .on('broadcast', { event: 'typing' }, ({ payload }: { payload: any }) => {
           const currentTypingUsers = payload.users || [];
           onTypingUsers(currentTypingUsers);
       })
@@ -129,7 +129,7 @@ if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_CHAT_PROVIDER === '
     let typingUsers = new Map<string, TypingUser>();
     const typingTimeout = new Map<string, NodeJS.Timeout>();
 
-    supabase.channel('typing').on('broadcast', { event: 'typing-update' }, ({ payload }) => {
+    supabase.channel('typing').on('broadcast', { event: 'typing-update' }, ({ payload }: { payload: any }) => {
         const { user, isTyping } = payload;
         
         // Clear any existing timeout for this user
