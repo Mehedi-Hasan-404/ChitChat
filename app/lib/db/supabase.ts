@@ -129,6 +129,14 @@ if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_CHAT_PROVIDER === '
     let typingUsers = new Map<string, TypingUser>();
     const typingTimeout = new Map<string, NodeJS.Timeout>();
 
+    const broadcastTypingState = () => {
+        supabase.channel('typing').send({
+            type: 'broadcast',
+            event: 'typing',
+            payload: { users: Array.from(typingUsers.values()) }
+        });
+    };
+
     supabase.channel('typing').on('broadcast', { event: 'typing-update' }, ({ payload }: { payload: any }) => {
         const { user, isTyping } = payload;
         
@@ -150,13 +158,5 @@ if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_CHAT_PROVIDER === '
         }
         
         broadcastTypingState();
-    });
-
-    function broadcastTypingState() {
-        supabase.channel('typing').send({
-            type: 'broadcast',
-            event: 'typing',
-            payload: { users: Array.from(typingUsers.values()) }
-        });
-    }
+    }).subscribe();
 }
