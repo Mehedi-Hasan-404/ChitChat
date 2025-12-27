@@ -4,7 +4,6 @@
 
 import * as React from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
-import Image from 'next/image';
 
 const Dialog = DialogPrimitive.Root;
 const DialogTrigger = DialogPrimitive.Trigger;
@@ -22,7 +21,16 @@ const DialogContent = React.forwardRef<
     >
       {children}
       <DialogPrimitive.Close className="absolute top-3 right-3 p-2 rounded-full transition-colors hover:bg-bg-light dark:hover:bg-dark-bg-light">
-        <Image src="/icons/close.svg" alt="Close" width={20} height={20} />
+        <svg 
+          xmlns="http://www.w3.org/2000/svg" 
+          fill="none" 
+          viewBox="0 0 24 24" 
+          strokeWidth="1.5" 
+          stroke="currentColor"
+          className="w-5 h-5 text-text-dark dark:text-dark-text-dark"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
         <span className="sr-only">Close</span>
       </DialogPrimitive.Close>
     </DialogPrimitive.Content>
