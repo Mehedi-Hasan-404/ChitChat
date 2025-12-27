@@ -6,24 +6,48 @@ import { useChat } from '@/lib/hooks/useChat';
 import { ThemeToggle } from '../ui/ThemeToggle';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../ui/Dialog';
 import { FormEvent, useState } from 'react';
+import { sanitizeProfilePicUrl, sanitizeName, sanitizeCssUrl } from '@/lib/security/sanitize';
 
 const ProfileEditor = ({ onClose }: { onClose: () => void }) => {
     const { user, saveUserProfile } = useChat();
     const [name, setName] = useState(user?.name || '');
     const [picUrl, setPicUrl] = useState(user?.pic || '');
+    const [error, setError] = useState('');
 
     const handleSubmit = (e: FormEvent) => {
         e.preventDefault();
-        if (name.trim()) {
-            saveUserProfile(name.trim(), picUrl.trim());
-            onClose();
+        setError('');
+        
+        const sanitizedName = sanitizeName(name);
+        
+        if (!sanitizedName) {
+            setError('Please enter a valid display name');
+            return;
         }
+        
+        // Sanitize profile picture URL
+        const sanitizedPic = picUrl.trim() ? sanitizeProfilePicUrl(picUrl.trim()) : '';
+        
+        if (picUrl.trim() && !sanitizedPic) {
+            setError('Invalid profile picture URL. Please use a valid http/https image URL.');
+            return;
+        }
+        
+        saveUserProfile(sanitizedName, sanitizedPic);
+        onClose();
     };
 
     return (
         <form onSubmit={handleSubmit} className="space-y-6">
-             <div>
-                <label htmlFor="name-input" className="block mb-2 font-medium text-text-dark dark:text-dark-text-dark">Display Name</label>
+            {error && (
+                <div className="p-3 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded-medium text-red-700 dark:text-red-300 text-sm">
+                    {error}
+                </div>
+            )}
+            <div>
+                <label htmlFor="name-input" className="block mb-2 font-medium text-text-dark dark:text-dark-text-dark">
+                    Display Name
+                </label>
                 <input
                     id="name-input"
                     type="text"
@@ -31,27 +55,39 @@ const ProfileEditor = ({ onClose }: { onClose: () => void }) => {
                     onChange={(e) => setName(e.target.value)}
                     placeholder="e.g., Alex Doe"
                     required
+                    maxLength={50}
                     className="w-full p-3 border border-border-color dark:border-dark-border-color rounded-medium bg-bg-light dark:bg-dark-bg-light focus:ring-2 focus:ring-primary dark:focus:ring-dark-primary outline-none"
                 />
+                <p className="text-xs text-text-secondary dark:text-dark-text-secondary mt-1">
+                    Max 50 characters
+                </p>
             </div>
             <div>
-                <label htmlFor="profile-pic-url" className="block mb-2 font-medium text-text-dark dark:text-dark-text-dark">Profile Picture URL (Optional)</label>
+                <label htmlFor="profile-pic-url" className="block mb-2 font-medium text-text-dark dark:text-dark-text-dark">
+                    Profile Picture URL (Optional)
+                </label>
                 <input
                     id="profile-pic-url"
-                    type="text"
+                    type="url"
                     value={picUrl}
                     onChange={(e) => setPicUrl(e.target.value)}
-                    placeholder="Paste image URL here"
+                    placeholder="https://example.com/image.jpg"
+                    maxLength={500}
                     className="w-full p-3 border border-border-color dark:border-dark-border-color rounded-medium bg-bg-light dark:bg-dark-bg-light focus:ring-2 focus:ring-primary dark:focus:ring-dark-primary outline-none"
                 />
+                <p className="text-xs text-text-secondary dark:text-dark-text-secondary mt-1">
+                    Only http/https URLs are allowed
+                </p>
             </div>
-            <button type="submit" className="w-full py-3 text-white font-semibold rounded-medium bg-primary hover:bg-primary-hover dark:bg-dark-primary dark:hover:bg-dark-primary-hover transition-all shadow-light hover:shadow-medium hover:-translate-y-0.5">
+            <button 
+                type="submit" 
+                className="w-full py-3 text-white font-semibold rounded-medium bg-primary hover:bg-primary-hover dark:bg-dark-primary dark:hover:bg-dark-primary-hover transition-all shadow-light hover:shadow-medium hover:-translate-y-0.5"
+            >
                 Save Changes
             </button>
         </form>
     );
 };
-
 
 export const ChatHeader = () => {
     const { user, onlineUsers, status } = useChat();
@@ -65,9 +101,23 @@ export const ChatHeader = () => {
         onlineStatusText = 'Connection Failed';
     }
 
+    // Secure profile picture style
+    const getProfilePicStyle = (picUrl: string | undefined) => {
+        if (!picUrl) return {};
+        const sanitized = sanitizeCssUrl(picUrl);
+        if (!sanitized) return {};
+        
+        return {
+            backgroundImage: `url('${sanitized}')`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center'
+        };
+    };
+
     const ProfileAvatar = () => (
-        <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg text-text-dark dark:text-dark-text-dark bg-amber-400 shadow-light border-2 border-white cursor-pointer transition-transform hover:scale-105"
-             style={{ backgroundImage: `url(${user?.pic})`, backgroundSize: 'cover', backgroundPosition: 'center' }}
+        <div 
+            className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg text-text-dark dark:text-dark-text-dark bg-amber-400 shadow-light border-2 border-white cursor-pointer transition-transform hover:scale-105"
+            style={getProfilePicStyle(user?.pic)}
         >
             {!user?.pic && (user?.name?.charAt(0) || 'U').toUpperCase()}
         </div>
@@ -77,7 +127,9 @@ export const ChatHeader = () => {
         <header className="flex-shrink-0 flex items-center p-3 sm:p-4 border-b border-border-color dark:border-dark-border-color bg-bg-main dark:bg-dark-bg-main shadow-sm">
             <Dialog open={isProfileOpen} onOpenChange={setProfileOpen}>
                 <DialogTrigger asChild>
-                    <button><ProfileAvatar /></button>
+                    <button aria-label="Edit profile">
+                        <ProfileAvatar />
+                    </button>
                 </DialogTrigger>
                 <DialogContent>
                     <DialogHeader>
@@ -88,8 +140,12 @@ export const ChatHeader = () => {
             </Dialog>
 
             <div className="flex-grow mx-3 overflow-hidden">
-                <h2 className="text-lg font-semibold truncate text-text-dark dark:text-dark-text-dark">ChatKat by Mehedi</h2>
-                <p className="text-sm font-medium text-text-secondary dark:text-dark-text-secondary">{onlineStatusText}</p>
+                <h2 className="text-lg font-semibold truncate text-text-dark dark:text-dark-text-dark">
+                    ChatKat by Mehedi
+                </h2>
+                <p className="text-sm font-medium text-text-secondary dark:text-dark-text-secondary">
+                    {onlineStatusText}
+                </p>
             </div>
             <ThemeToggle />
         </header>
