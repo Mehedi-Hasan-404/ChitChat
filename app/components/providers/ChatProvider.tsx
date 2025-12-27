@@ -2,9 +2,9 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { useAuth } from '@/app/contexts/AuthContext';
-import { chatService } from '@/app/lib/db';
-import { Message, UserProfile, OnlineUser, TypingUser } from '@/app/lib/types';
+import { useAuth } from '../../contexts/AuthContext';
+import { chatService } from '../../lib/db';
+import { Message, UserProfile, OnlineUser, TypingUser } from '../../lib/types';
 
 interface ChatContextType {
   messages: Message[];
