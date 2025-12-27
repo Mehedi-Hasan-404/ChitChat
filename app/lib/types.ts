@@ -6,6 +6,15 @@ export interface UserProfile {
   sessionId: string;
 }
 
+export interface ReplyTo {
+  id: string;
+  text: string;
+  sender: {
+    name: string;
+    pic: string;
+  };
+}
+
 export interface Message {
   id: string;
   text: string;
@@ -15,6 +24,7 @@ export interface Message {
     pic: string;
   };
   sessionId: string;
+  replyTo?: ReplyTo;
 }
 
 export interface TypingUser {
