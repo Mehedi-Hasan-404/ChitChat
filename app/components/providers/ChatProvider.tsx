@@ -5,6 +5,7 @@
 import React, { createContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
 import { UserProfile, Message, OnlineUser, TypingUser, ReplyTo } from '@/lib/types';
 import { dbService } from '@/lib/db';
+import { sanitizeName, sanitizeProfilePicUrl } from '@/lib/security/sanitize';
 
 interface ChatContextType {
   user: UserProfile | null;
@@ -53,7 +54,15 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
       }
 
       if (savedName) {
-        const loadedUser = { name: savedName, pic: savedPic, sessionId };
+        // Sanitize loaded data
+        const sanitizedName = sanitizeName(savedName);
+        const sanitizedPic = savedPic ? sanitizeProfilePicUrl(savedPic) : '';
+        
+        const loadedUser = { 
+          name: sanitizedName || 'User', 
+          pic: sanitizedPic, 
+          sessionId 
+        };
         setUser(loadedUser);
         setStatus('connected');
       }
@@ -68,9 +77,44 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
 
     try {
       dbService.init(
-        (newMessages) => setMessages(newMessages),
-        (newOnlineUsers) => setOnlineUsers(newOnlineUsers),
-        (newTypingUsers) => setTypingUsers(newTypingUsers.filter(u => u.sessionId !== user.sessionId))
+        (newMessages) => {
+          // Sanitize incoming messages
+          const sanitizedMessages = newMessages.map(msg => ({
+            ...msg,
+            text: msg.text || '',
+            sender: {
+              name: sanitizeName(msg.sender?.name || 'Unknown'),
+              pic: msg.sender?.pic ? sanitizeProfilePicUrl(msg.sender.pic) : '',
+            },
+            replyTo: msg.replyTo ? {
+              ...msg.replyTo,
+              text: msg.replyTo.text || '',
+              sender: {
+                name: sanitizeName(msg.replyTo.sender?.name || 'Unknown'),
+                pic: msg.replyTo.sender?.pic ? sanitizeProfilePicUrl(msg.replyTo.sender.pic) : '',
+              }
+            } : undefined,
+          }));
+          setMessages(sanitizedMessages);
+        },
+        (newOnlineUsers) => {
+          // Sanitize online users
+          const sanitizedUsers = newOnlineUsers.map(u => ({
+            ...u,
+            name: sanitizeName(u.name || 'Unknown'),
+          }));
+          setOnlineUsers(sanitizedUsers);
+        },
+        (newTypingUsers) => {
+          // Sanitize typing users
+          const sanitizedUsers = newTypingUsers
+            .filter(u => u.sessionId !== user.sessionId)
+            .map(u => ({
+              ...u,
+              name: sanitizeName(u.name || 'Unknown'),
+            }));
+          setTypingUsers(sanitizedUsers);
+        }
       );
       dbService.setupPresence(user);
       setStatus('connected');
@@ -86,14 +130,24 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
     if (!isClient) return;
 
     try {
+      // Sanitize inputs
+      const sanitizedName = sanitizeName(name);
+      const sanitizedPic = pic ? sanitizeProfilePicUrl(pic) : '';
+      
+      if (!sanitizedName) {
+        console.error('Invalid name provided');
+        return;
+      }
+      
       let sessionId = localStorage.getItem('sessionId');
       if (!sessionId) {
         sessionId = `session_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
         localStorage.setItem('sessionId', sessionId);
       }
-      const newUser = { name, pic, sessionId };
-      localStorage.setItem('userName', name);
-      localStorage.setItem('profilePic', pic);
+      
+      const newUser = { name: sanitizedName, pic: sanitizedPic, sessionId };
+      localStorage.setItem('userName', sanitizedName);
+      localStorage.setItem('profilePic', sanitizedPic);
       setUser(newUser);
     } catch (error) {
       console.error("Could not access localStorage:", error);
@@ -101,35 +155,58 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
   }, [isClient]);
   
   const sendMessage = useCallback((text: string) => {
-    if (!user || text.trim() === '') return;
+    if (!user || !text || typeof text !== 'string') return;
+    
+    const trimmed = text.trim();
+    if (trimmed === '' || trimmed.length > 5000) return;
     
     let replyToData: ReplyTo | undefined;
     if (replyingTo) {
       replyToData = {
         id: replyingTo.id,
-        text: replyingTo.text,
-        sender: replyingTo.sender,
+        text: replyingTo.text || '',
+        sender: {
+          name: sanitizeName(replyingTo.sender?.name || 'Unknown'),
+          pic: replyingTo.sender?.pic ? sanitizeProfilePicUrl(replyingTo.sender.pic) : '',
+        },
       };
     }
     
     const messageData = {
-      text,
-      sender: { name: user.name, pic: user.pic },
+      text: trimmed,
+      sender: { 
+        name: user.name, 
+        pic: user.pic 
+      },
       sessionId: user.sessionId,
       replyTo: replyToData,
     };
+    
     dbService.sendMessage(messageData);
     setReplyingTo(null);
   }, [user, replyingTo]);
 
   const uploadAndSendMessage = useCallback(async (file: File) => {
-    if(!user) return;
+    if (!user) return;
+    
+    // Validate file
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      throw new Error('Invalid file type');
+    }
+    
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (file.size > maxSize) {
+      throw new Error('File too large');
+    }
+    
     try {
       const imageUrl = await dbService.uploadImage(file);
+      // The URL will be sanitized when rendering
       sendMessage(imageUrl);
     } catch (error) {
       console.error("Image upload failed:", error);
-      alert("Failed to upload image.");
+      throw error;
     }
   }, [user, sendMessage]);
 
