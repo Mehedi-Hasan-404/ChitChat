@@ -1,186 +1,148 @@
-// components/chat/ChatHeader.tsx
-
+// app/components/chat/ChatHeader.tsx
 'use client';
 
-import { useChat } from '@/lib/hooks/useChat';
-import { ThemeToggle } from '../ui/ThemeToggle';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../ui/Dialog';
-import { FormEvent, useState, useEffect } from 'react';
-import { sanitizeProfilePicUrl, sanitizeName, sanitizeCssUrl } from '@/lib/security/sanitize';
+import { useState, FormEvent } from 'react';
+import { useAuth } from '@/app/contexts/AuthContext';
+import { useChat } from '../providers/ChatProvider';
+import { LogOut, Settings, X } from 'lucide-react';
 
-const ProfileEditor = ({ onClose }: { onClose: () => void }) => {
+export function ChatHeader() {
+    const { signOut } = useAuth();
+    const [showSettings, setShowSettings] = useState(false);
     const { user, saveUserProfile } = useChat();
     const [name, setName] = useState(user?.name || '');
-    const [picUrl, setPicUrl] = useState(user?.pic || '');
+    const [picUrl, setPicUrl] = useState(user?.avatarUrl || '');
     const [error, setError] = useState('');
 
     const handleSubmit = (e: FormEvent) => {
         e.preventDefault();
+        
+        if (!name.trim()) {
+            setError('Name is required');
+            return;
+        }
+
+        saveUserProfile({
+            name: name.trim(),
+            avatarUrl: picUrl.trim() || undefined
+        });
+
+        setShowSettings(false);
         setError('');
-        
-        const sanitizedName = sanitizeName(name);
-        
-        if (!sanitizedName) {
-            setError('Please enter a valid display name');
-            return;
-        }
-        
-        const sanitizedPic = picUrl.trim() ? sanitizeProfilePicUrl(picUrl.trim()) : '';
-        
-        if (picUrl.trim() && !sanitizedPic) {
-            setError('Invalid profile picture URL. Please use a valid http/https image URL.');
-            return;
-        }
-        
-        saveUserProfile(sanitizedName, sanitizedPic);
-        onClose();
     };
 
     return (
-        <form onSubmit={handleSubmit} className="space-y-6">
-            {error && (
-                <div className="p-3 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded-medium text-red-700 dark:text-red-300 text-sm">
-                    {error}
+        <div className="bg-white border-b border-gray-200 p-4">
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    {user?.avatarUrl ? (
+                        <img 
+                            src={user.avatarUrl} 
+                            alt={user.name}
+                            className="w-10 h-10 rounded-full"
+                        />
+                    ) : (
+                        <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-semibold">
+                            {user?.name?.charAt(0).toUpperCase() || 'U'}
+                        </div>
+                    )}
+                    <div>
+                        <h1 className="text-xl font-bold text-gray-800">ChitChat</h1>
+                        <p className="text-sm text-gray-500">{user?.name || 'Anonymous'}</p>
+                    </div>
                 </div>
-            )}
-            <div>
-                <label htmlFor="name-input" className="block mb-2 font-medium text-text-dark dark:text-dark-text-dark">
-                    Display Name
-                </label>
-                <input
-                    id="name-input"
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="e.g., Alex Doe"
-                    required
-                    maxLength={50}
-                    className="w-full p-3 border border-border-color dark:border-dark-border-color rounded-medium bg-bg-light dark:bg-dark-bg-light focus:ring-2 focus:ring-primary dark:focus:ring-dark-primary outline-none text-text-dark dark:text-dark-text-dark"
-                />
-            </div>
-            <div>
-                <label htmlFor="profile-pic-url" className="block mb-2 font-medium text-text-dark dark:text-dark-text-dark">
-                    Profile Picture URL (Optional)
-                </label>
-                <input
-                    id="profile-pic-url"
-                    type="url"
-                    value={picUrl}
-                    onChange={(e) => setPicUrl(e.target.value)}
-                    placeholder="https://example.com/image.jpg"
-                    maxLength={500}
-                    className="w-full p-3 border border-border-color dark:border-dark-border-color rounded-medium bg-bg-light dark:bg-dark-bg-light focus:ring-2 focus:ring-primary dark:focus:ring-dark-primary outline-none text-text-dark dark:text-dark-text-dark"
-                />
-            </div>
-            <button 
-                type="submit" 
-                className="w-full py-3 text-white font-semibold rounded-medium bg-primary hover:bg-primary-hover dark:bg-dark-primary dark:hover:bg-dark-primary-hover transition-all shadow-light hover:shadow-medium hover:-translate-y-0.5"
-            >
-                Save Changes
-            </button>
-        </form>
-    );
-};
-
-export const ChatHeader = () => {
-    const { user, onlineUsers, status } = useChat();
-    const [isProfileOpen, setProfileOpen] = useState(false);
-    const [showDebug, setShowDebug] = useState(false);
-    
-    const onlineCount = onlineUsers.length;
-    let onlineStatusText = 'Connecting...';
-    let statusColor = 'text-yellow-500';
-    
-    if(status === 'connected') {
-        onlineStatusText = `${onlineCount} user${onlineCount !== 1 ? 's' : ''} online`;
-        statusColor = 'text-green-500';
-    } else if (status === 'error') {
-        onlineStatusText = 'Connection Failed';
-        statusColor = 'text-red-500';
-    }
-
-    // Show debug info if connection fails
-    useEffect(() => {
-        if (status === 'error') {
-            console.error('❌ Connection Error - Check console for details');
-            setShowDebug(true);
-        }
-    }, [status]);
-
-    const getProfilePicStyle = (picUrl: string | undefined) => {
-        if (!picUrl) return {};
-        const sanitized = sanitizeCssUrl(picUrl);
-        if (!sanitized) return {};
-        
-        return {
-            backgroundImage: `url('${sanitized}')`,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center'
-        };
-    };
-
-    const ProfileAvatar = () => (
-        <div 
-            className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg text-white bg-gradient-to-br from-amber-400 to-orange-500 shadow-light border-2 border-white dark:border-gray-700 cursor-pointer transition-transform hover:scale-105"
-            style={getProfilePicStyle(user?.pic)}
-        >
-            {!user?.pic && (user?.name?.charAt(0) || 'U').toUpperCase()}
-        </div>
-    );
-
-    return (
-        <>
-            <header className="flex-shrink-0 flex items-center p-3 sm:p-4 border-b border-border-color dark:border-dark-border-color bg-bg-main dark:bg-dark-bg-main shadow-sm">
-                <Dialog open={isProfileOpen} onOpenChange={setProfileOpen}>
-                    <DialogTrigger asChild>
-                        <button aria-label="Edit profile">
-                            <ProfileAvatar />
-                        </button>
-                    </DialogTrigger>
-                    <DialogContent>
-                        <DialogHeader>
-                            <DialogTitle>Edit Your Profile</DialogTitle>
-                        </DialogHeader>
-                        <ProfileEditor onClose={() => setProfileOpen(false)} />
-                    </DialogContent>
-                </Dialog>
-
-                <div className="flex-grow mx-3 overflow-hidden">
-                    <h2 className="text-lg font-semibold truncate text-text-dark dark:text-dark-text-dark">
-                        ChatKat by Mehedi
-                    </h2>
-                    <p className={`text-sm font-medium ${statusColor}`}>
-                        {onlineStatusText}
-                        {status === 'error' && (
-                            <button 
-                                onClick={() => window.location.reload()}
-                                className="ml-2 text-xs underline text-primary dark:text-dark-primary"
-                            >
-                                Retry
-                            </button>
-                        )}
-                    </p>
-                </div>
-                <ThemeToggle />
-            </header>
-            
-            {/* Debug Info Banner */}
-            {showDebug && status === 'error' && (
-                <div className="bg-red-100 dark:bg-red-900/30 border-b border-red-300 dark:border-red-700 p-3 text-sm">
-                    <p className="text-red-800 dark:text-red-300 font-semibold mb-1">
-                        🔴 Connection Error
-                    </p>
-                    <p className="text-red-700 dark:text-red-400 text-xs mb-2">
-                        Check browser console (F12) for details, or verify your environment variables are set correctly.
-                    </p>
-                    <button 
-                        onClick={() => setShowDebug(false)}
-                        className="text-xs text-red-600 dark:text-red-400 underline"
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => setShowSettings(true)}
+                        className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                        title="Settings"
                     >
-                        Dismiss
+                        <Settings className="w-5 h-5 text-gray-600" />
+                    </button>
+                    <button
+                        onClick={signOut}
+                        className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                        title="Sign out"
+                    >
+                        <LogOut className="w-5 h-5 text-gray-600" />
                     </button>
                 </div>
+            </div>
+
+            {/* Settings Modal */}
+            {showSettings && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-lg p-6 w-full max-w-md m-4">
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-xl font-bold">Profile Settings</h2>
+                            <button
+                                onClick={() => {
+                                    setShowSettings(false);
+                                    setError('');
+                                    setName(user?.name || '');
+                                    setPicUrl(user?.avatarUrl || '');
+                                }}
+                                className="p-1 hover:bg-gray-100 rounded"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Display Name
+                                </label>
+                                <input
+                                    type="text"
+                                    value={name}
+                                    onChange={(e) => setName(e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    placeholder="Enter your name"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Avatar URL (optional)
+                                </label>
+                                <input
+                                    type="url"
+                                    value={picUrl}
+                                    onChange={(e) => setPicUrl(e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    placeholder="https://example.com/avatar.jpg"
+                                />
+                            </div>
+
+                            {error && (
+                                <p className="text-red-500 text-sm">{error}</p>
+                            )}
+
+                            <div className="flex gap-2">
+                                <button
+                                    type="submit"
+                                    className="flex-1 bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600 transition-colors"
+                                >
+                                    Save Changes
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setShowSettings(false);
+                                        setError('');
+                                        setName(user?.name || '');
+                                        setPicUrl(user?.avatarUrl || '');
+                                    }}
+                                    className="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg hover:bg-gray-300 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
             )}
-        </>
+        </div>
     );
-};
+}
