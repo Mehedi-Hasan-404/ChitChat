@@ -4,6 +4,7 @@ import { initializeApp, getApp, getApps } from 'firebase/app';
 import { getDatabase, ref, onValue, push, serverTimestamp, onDisconnect, set, remove, query, limitToLast } from 'firebase/database';
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { ChatService, Message, UserProfile, OnlineUser, TypingUser } from '../types';
+import { sanitizeFileName } from '../security/sanitize';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || '',
@@ -39,7 +40,11 @@ export const firebaseService: ChatService = {
     onValue(messagesQuery, (snapshot) => {
       const messagesData = snapshot.val();
       const messagesArray: Message[] = messagesData 
-        ? Object.entries(messagesData).map(([id, msg]: [string, any]) => ({ id, ...msg })) 
+        ? Object.entries(messagesData).map(([id, msg]: [string, any]) => ({ 
+            id, 
+            ...msg,
+            replyTo: msg.replyTo || undefined,
+          })) 
         : [];
       onMessages(messagesArray);
     });
@@ -48,7 +53,10 @@ export const firebaseService: ChatService = {
     onValue(presenceRef, (snapshot) => {
         const presenceData = snapshot.val();
         const usersArray: OnlineUser[] = presenceData
-            ? Object.entries(presenceData).map(([sessionId, user]: [string, any]) => ({ sessionId, name: user.name }))
+            ? Object.entries(presenceData).map(([sessionId, user]: [string, any]) => ({ 
+                sessionId, 
+                name: user.name 
+              }))
             : [];
         onOnlineUsers(usersArray);
     });
@@ -57,7 +65,10 @@ export const firebaseService: ChatService = {
     onValue(typingRef, (snapshot) => {
         const typingData = snapshot.val();
         const usersArray: TypingUser[] = typingData
-            ? Object.entries(typingData).map(([sessionId, user]: [string, any]) => ({ sessionId, name: user.name }))
+            ? Object.entries(typingData).map(([sessionId, user]: [string, any]) => ({ 
+                sessionId, 
+                name: user.name 
+              }))
             : [];
         onTypingUsers(usersArray);
     });
@@ -69,16 +80,32 @@ export const firebaseService: ChatService = {
       return;
     }
     const messagesRef = ref(db, `${DB_PATH}/messages`);
-    await push(messagesRef, { ...message, timestamp: serverTimestamp() });
+    await push(messagesRef, { 
+      ...message, 
+      timestamp: serverTimestamp(),
+      replyTo: message.replyTo || null,
+    });
   },
 
   async uploadImage(file) {
     if (!storage) {
       throw new Error('Firebase storage not initialized');
     }
-    const filePath = `chat_images/${Date.now()}_${file.name}`;
+    
+    // Sanitize file name to prevent path traversal
+    const sanitizedName = sanitizeFileName(file.name);
+    const timestamp = Date.now();
+    const randomSuffix = Math.random().toString(36).substring(2, 8);
+    const filePath = `chat_images/${timestamp}_${randomSuffix}_${sanitizedName}`;
+    
     const fileRef = storageRef(storage, filePath);
-    await uploadBytes(fileRef, file);
+    
+    await uploadBytes(fileRef, file, {
+      customMetadata: {
+        uploadedAt: new Date().toISOString(),
+      }
+    });
+    
     return getDownloadURL(fileRef);
   },
 
