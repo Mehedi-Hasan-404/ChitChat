@@ -1,145 +1,229 @@
 // lib/db/firebase.ts
 
-import { initializeApp, getApp, getApps } from 'firebase/app';
-import { getDatabase, ref, onValue, push, serverTimestamp, onDisconnect, set, remove, query, limitToLast } from 'firebase/database';
-import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
+import { getAuth, Auth } from 'firebase/auth';
+import { 
+  getDatabase, 
+  ref, 
+  push, 
+  onValue, 
+  set, 
+  remove,
+  onDisconnect,
+  serverTimestamp,
+  Database,
+  get,
+  query,
+  orderByChild,
+  limitToLast
+} from 'firebase/database';
 import { ChatService, Message, UserProfile, OnlineUser, TypingUser } from '../types';
-import { sanitizeFileName } from '../security/sanitize';
 
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || '',
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || '',
-  databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL || '',
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || '',
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || '',
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || '',
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || '',
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
 };
 
-// Initialize Firebase only on client side
-let app: any = null;
-let db: any = null;
-let storage: any = null;
+let app: FirebaseApp;
+let auth: Auth;
+let database: Database;
 
 if (typeof window !== 'undefined') {
-  app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-  db = getDatabase(app);
-  storage = getStorage(app);
+  if (!getApps().length) {
+    app = initializeApp(firebaseConfig);
+  } else {
+    app = getApps()[0];
+  }
+  auth = getAuth(app);
+  database = getDatabase(app);
 }
 
-const DB_PATH = 'chatkat_main_chat';
-
 export const firebaseService: ChatService = {
-  init(onMessages, onOnlineUsers, onTypingUsers) {
-    if (!db) {
-      console.error('Firebase database not initialized');
-      return;
+  async sendMessage(message: Message): Promise<void> {
+    if (!database) {
+      throw new Error('Firebase not initialized');
     }
 
-    const messagesQuery = query(ref(db, `${DB_PATH}/messages`), limitToLast(100));
-    onValue(messagesQuery, (snapshot) => {
-      const messagesData = snapshot.val();
-      const messagesArray: Message[] = messagesData 
-        ? Object.entries(messagesData).map(([id, msg]: [string, any]) => ({ 
-            id, 
-            ...msg,
-            replyTo: msg.replyTo || undefined,
-          })) 
-        : [];
-      onMessages(messagesArray);
-    });
-
-    const presenceRef = ref(db, `${DB_PATH}/presence`);
-    onValue(presenceRef, (snapshot) => {
-        const presenceData = snapshot.val();
-        const usersArray: OnlineUser[] = presenceData
-            ? Object.entries(presenceData).map(([sessionId, user]: [string, any]) => ({ 
-                sessionId, 
-                name: user.name 
-              }))
-            : [];
-        onOnlineUsers(usersArray);
-    });
-
-    const typingRef = ref(db, `${DB_PATH}/typing`);
-    onValue(typingRef, (snapshot) => {
-        const typingData = snapshot.val();
-        const usersArray: TypingUser[] = typingData
-            ? Object.entries(typingData).map(([sessionId, user]: [string, any]) => ({ 
-                sessionId, 
-                name: user.name 
-              }))
-            : [];
-        onTypingUsers(usersArray);
+    const messagesRef = ref(database, 'messages');
+    const newMessageRef = push(messagesRef);
+    
+    await set(newMessageRef, {
+      ...message,
+      timestamp: serverTimestamp()
     });
   },
 
-  async sendMessage(message) {
-    if (!db) {
-      console.error('Firebase database not initialized');
-      return;
+  subscribeToMessages(callback: (messages: Message[]) => void): () => void {
+    if (!database) {
+      console.error('Firebase not initialized');
+      return () => {};
     }
-    const messagesRef = ref(db, `${DB_PATH}/messages`);
-    await push(messagesRef, { 
-      ...message, 
-      timestamp: serverTimestamp(),
-      replyTo: message.replyTo || null,
+
+    const messagesRef = ref(database, 'messages');
+    const messagesQuery = query(messagesRef, orderByChild('timestamp'), limitToLast(100));
+    
+    const unsubscribe = onValue(messagesQuery, (snapshot) => {
+      const messages: Message[] = [];
+      snapshot.forEach((childSnapshot) => {
+        const data = childSnapshot.val();
+        messages.push({
+          id: childSnapshot.key!,
+          content: data.content,
+          userId: data.userId,
+          userName: data.userName,
+          timestamp: data.timestamp || Date.now()
+        });
+      });
+      callback(messages);
+    }, (error) => {
+      console.error('Error subscribing to messages:', error);
+    });
+
+    return unsubscribe;
+  },
+
+  async createOrUpdateUserProfile(profile: UserProfile): Promise<void> {
+    if (!database) {
+      throw new Error('Firebase not initialized');
+    }
+
+    const userRef = ref(database, `users/${profile.id}`);
+    await set(userRef, {
+      id: profile.id,
+      name: profile.name,
+      email: profile.email,
+      avatarUrl: profile.avatarUrl,
+      lastSeen: serverTimestamp()
     });
   },
 
-  async uploadImage(file) {
-    if (!storage) {
-      throw new Error('Firebase storage not initialized');
+  async getUserProfile(userId: string): Promise<UserProfile | null> {
+    if (!database) {
+      throw new Error('Firebase not initialized');
     }
+
+    const userRef = ref(database, `users/${userId}`);
+    const snapshot = await get(userRef);
     
-    // Sanitize file name to prevent path traversal
-    const sanitizedName = sanitizeFileName(file.name);
-    const timestamp = Date.now();
-    const randomSuffix = Math.random().toString(36).substring(2, 8);
-    const filePath = `chat_images/${timestamp}_${randomSuffix}_${sanitizedName}`;
-    
-    const fileRef = storageRef(storage, filePath);
-    
-    await uploadBytes(fileRef, file, {
-      customMetadata: {
-        uploadedAt: new Date().toISOString(),
-      }
-    });
-    
-    return getDownloadURL(fileRef);
+    if (snapshot.exists()) {
+      return snapshot.val() as UserProfile;
+    }
+    return null;
   },
 
-  setTypingStatus(user, isTyping) {
-    if (!db) {
-      console.error('Firebase database not initialized');
-      return;
+  async setUserOnline(userId: string, userName: string): Promise<void> {
+    if (!database) {
+      throw new Error('Firebase not initialized');
     }
-    const myTypingRef = ref(db, `${DB_PATH}/typing/${user.sessionId}`);
+
+    const onlineUserRef = ref(database, `onlineUsers/${userId}`);
+    const userStatusRef = ref(database, `users/${userId}/status`);
+    
+    // Set user as online
+    await set(onlineUserRef, {
+      id: userId,
+      name: userName,
+      lastSeen: serverTimestamp()
+    });
+
+    await set(userStatusRef, 'online');
+
+    // Set up disconnect handler
+    onDisconnect(onlineUserRef).remove();
+    onDisconnect(userStatusRef).set('offline');
+  },
+
+  async setUserOffline(userId: string): Promise<void> {
+    if (!database) {
+      throw new Error('Firebase not initialized');
+    }
+
+    const onlineUserRef = ref(database, `onlineUsers/${userId}`);
+    const userStatusRef = ref(database, `users/${userId}/status`);
+    
+    await remove(onlineUserRef);
+    await set(userStatusRef, 'offline');
+  },
+
+  subscribeToOnlineUsers(callback: (users: OnlineUser[]) => void): () => void {
+    if (!database) {
+      console.error('Firebase not initialized');
+      return () => {};
+    }
+
+    const onlineUsersRef = ref(database, 'onlineUsers');
+    
+    const unsubscribe = onValue(onlineUsersRef, (snapshot) => {
+      const users: OnlineUser[] = [];
+      snapshot.forEach((childSnapshot) => {
+        const data = childSnapshot.val();
+        users.push({
+          id: data.id,
+          name: data.name,
+          lastSeen: data.lastSeen
+        });
+      });
+      callback(users);
+    }, (error) => {
+      console.error('Error subscribing to online users:', error);
+    });
+
+    return unsubscribe;
+  },
+
+  async setUserTyping(userId: string, userName: string, isTyping: boolean): Promise<void> {
+    if (!database) {
+      throw new Error('Firebase not initialized');
+    }
+
+    const typingRef = ref(database, `typing/${userId}`);
+    
     if (isTyping) {
-      set(myTypingRef, { name: user.name });
-      onDisconnect(myTypingRef).remove();
+      await set(typingRef, {
+        id: userId,
+        name: userName,
+        isTyping: true,
+        timestamp: serverTimestamp()
+      });
+      
+      // Auto-remove typing status after 5 seconds
+      onDisconnect(typingRef).remove();
     } else {
-      remove(myTypingRef);
+      await remove(typingRef);
     }
   },
 
-  setupPresence(user) {
-    if (!db) {
-      console.error('Firebase database not initialized');
-      return;
+  subscribeToTypingUsers(callback: (users: TypingUser[]) => void): () => void {
+    if (!database) {
+      console.error('Firebase not initialized');
+      return () => {};
     }
-    const myPresenceRef = ref(db, `${DB_PATH}/presence/${user.sessionId}`);
-    const connectedRef = ref(db, '.info/connected');
-    onValue(connectedRef, (snap) => {
-      if (snap.val() === true) {
-        set(myPresenceRef, { name: user.name, last_seen: serverTimestamp() });
-        onDisconnect(myPresenceRef).remove();
-      }
+
+    const typingRef = ref(database, 'typing');
+    
+    const unsubscribe = onValue(typingRef, (snapshot) => {
+      const users: TypingUser[] = [];
+      snapshot.forEach((childSnapshot) => {
+        const data = childSnapshot.val();
+        users.push({
+          id: data.id,
+          name: data.name,
+          isTyping: data.isTyping
+        });
+      });
+      callback(users);
+    }, (error) => {
+      console.error('Error subscribing to typing users:', error);
     });
-  },
 
-  cleanup() {
-    // Firebase handles listener cleanup internally, but if you had specific
-    // off() calls, they would go here. For this app, onDisconnect handles it.
-  },
+    return unsubscribe;
+  }
 };
+
+export { auth, database };
