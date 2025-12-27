@@ -37,20 +37,25 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
   // Check if we're on the client side
   useEffect(() => {
     setIsClient(true);
+    console.log('🚀 ChatProvider mounted on client');
   }, []);
 
   // Load user profile from localStorage on initial load
   useEffect(() => {
     if (!isClient) return;
 
+    console.log('📱 Loading user from localStorage...');
     try {
       const savedName = localStorage.getItem('userName');
       const savedPic = localStorage.getItem('profilePic') || '';
       let sessionId = localStorage.getItem('sessionId');
       
+      console.log('💾 localStorage data:', { savedName, hasPic: !!savedPic, sessionId });
+      
       if (!sessionId) {
         sessionId = `session_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
         localStorage.setItem('sessionId', sessionId);
+        console.log('🆕 Generated new session ID:', sessionId);
       }
 
       if (savedName) {
@@ -63,21 +68,37 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
           pic: sanitizedPic, 
           sessionId 
         };
+        console.log('✅ User loaded:', loadedUser);
         setUser(loadedUser);
         setStatus('connected');
+      } else {
+        console.log('❌ No saved user found - need to create profile');
       }
     } catch (error) {
-      console.error("Could not access localStorage:", error);
+      console.error("❌ Could not access localStorage:", error);
+      setStatus('error');
     }
   }, [isClient]);
 
   // Initialize database connection and listeners when user is set
   useEffect(() => {
-    if (!user || !isClient) return;
+    if (!user || !isClient) {
+      console.log('⏸️ Skipping DB init:', { hasUser: !!user, isClient });
+      return;
+    }
+
+    console.log('🔌 Initializing database connection...');
+    console.log('🔧 Environment:', {
+      provider: process.env.NEXT_PUBLIC_CHAT_PROVIDER,
+      hasSupabaseUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+      hasSupabaseKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      hasFirebaseKey: !!process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+    });
 
     try {
       dbService.init(
         (newMessages) => {
+          console.log('📨 Messages received:', newMessages.length);
           // Sanitize incoming messages
           const sanitizedMessages = newMessages.map(msg => ({
             ...msg,
@@ -98,6 +119,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
           setMessages(sanitizedMessages);
         },
         (newOnlineUsers) => {
+          console.log('👥 Online users:', newOnlineUsers.length);
           // Sanitize online users
           const sanitizedUsers = newOnlineUsers.map(u => ({
             ...u,
@@ -106,6 +128,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
           setOnlineUsers(sanitizedUsers);
         },
         (newTypingUsers) => {
+          console.log('⌨️ Typing users:', newTypingUsers.length);
           // Sanitize typing users
           const sanitizedUsers = newTypingUsers
             .filter(u => u.sessionId !== user.sessionId)
@@ -116,26 +139,33 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
           setTypingUsers(sanitizedUsers);
         }
       );
+      
+      console.log('👋 Setting up presence for user:', user.name);
       dbService.setupPresence(user);
       setStatus('connected');
+      console.log('✅ Database connected successfully');
     } catch (error) {
-      console.error("DB initialization failed:", error);
+      console.error("❌ DB initialization failed:", error);
       setStatus('error');
     }
 
-    return () => dbService.cleanup();
+    return () => {
+      console.log('🧹 Cleaning up database connection');
+      dbService.cleanup();
+    };
   }, [user, isClient]);
 
   const saveUserProfile = useCallback((name: string, pic: string) => {
     if (!isClient) return;
 
+    console.log('💾 Saving user profile:', { name, hasPic: !!pic });
     try {
       // Sanitize inputs
       const sanitizedName = sanitizeName(name);
       const sanitizedPic = pic ? sanitizeProfilePicUrl(pic) : '';
       
       if (!sanitizedName) {
-        console.error('Invalid name provided');
+        console.error('❌ Invalid name provided');
         return;
       }
       
@@ -149,16 +179,25 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
       localStorage.setItem('userName', sanitizedName);
       localStorage.setItem('profilePic', sanitizedPic);
       setUser(newUser);
+      console.log('✅ User profile saved');
     } catch (error) {
-      console.error("Could not access localStorage:", error);
+      console.error("❌ Could not save to localStorage:", error);
     }
   }, [isClient]);
   
   const sendMessage = useCallback((text: string) => {
-    if (!user || !text || typeof text !== 'string') return;
+    if (!user || !text || typeof text !== 'string') {
+      console.log('❌ Cannot send message:', { hasUser: !!user, hasText: !!text });
+      return;
+    }
     
     const trimmed = text.trim();
-    if (trimmed === '' || trimmed.length > 5000) return;
+    if (trimmed === '' || trimmed.length > 5000) {
+      console.log('❌ Invalid message length:', trimmed.length);
+      return;
+    }
+    
+    console.log('📤 Sending message:', trimmed.substring(0, 50));
     
     let replyToData: ReplyTo | undefined;
     if (replyingTo) {
@@ -187,25 +226,32 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
   }, [user, replyingTo]);
 
   const uploadAndSendMessage = useCallback(async (file: File) => {
-    if (!user) return;
+    if (!user) {
+      console.log('❌ No user for upload');
+      return;
+    }
+    
+    console.log('📤 Uploading file:', file.name, file.type, file.size);
     
     // Validate file
     const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
     if (!allowedTypes.includes(file.type)) {
+      console.error('❌ Invalid file type:', file.type);
       throw new Error('Invalid file type');
     }
     
     const maxSize = 5 * 1024 * 1024; // 5MB
     if (file.size > maxSize) {
+      console.error('❌ File too large:', file.size);
       throw new Error('File too large');
     }
     
     try {
       const imageUrl = await dbService.uploadImage(file);
-      // The URL will be sanitized when rendering
+      console.log('✅ File uploaded:', imageUrl);
       sendMessage(imageUrl);
     } catch (error) {
-      console.error("Image upload failed:", error);
+      console.error("❌ Image upload failed:", error);
       throw error;
     }
   }, [user, sendMessage]);
