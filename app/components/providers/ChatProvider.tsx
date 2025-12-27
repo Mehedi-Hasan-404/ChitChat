@@ -3,7 +3,7 @@
 'use client';
 
 import React, { createContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
-import { UserProfile, Message, OnlineUser, TypingUser } from '@/lib/types';
+import { UserProfile, Message, OnlineUser, TypingUser, ReplyTo } from '@/lib/types';
 import { dbService } from '@/lib/db';
 
 interface ChatContextType {
@@ -12,10 +12,12 @@ interface ChatContextType {
   onlineUsers: OnlineUser[];
   typingUsers: TypingUser[];
   status: 'connecting' | 'connected' | 'error';
+  replyingTo: Message | null;
   saveUserProfile: (name: string, pic: string) => void;
   sendMessage: (text: string) => void;
   uploadAndSendMessage: (file: File) => void;
   setTyping: (isTyping: boolean) => void;
+  setReplyingTo: (message: Message | null) => void;
 }
 
 export const ChatContext = createContext<ChatContextType | null>(null);
@@ -29,6 +31,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
   const [isTyping, setIsTyping] = useState(false);
   const [typingTimeout, setTypingTimeout] = useState<NodeJS.Timeout | null>(null);
   const [isClient, setIsClient] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   
   // Check if we're on the client side
   useEffect(() => {
@@ -99,13 +102,25 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
   
   const sendMessage = useCallback((text: string) => {
     if (!user || text.trim() === '') return;
+    
+    let replyToData: ReplyTo | undefined;
+    if (replyingTo) {
+      replyToData = {
+        id: replyingTo.id,
+        text: replyingTo.text,
+        sender: replyingTo.sender,
+      };
+    }
+    
     const messageData = {
       text,
       sender: { name: user.name, pic: user.pic },
       sessionId: user.sessionId,
+      replyTo: replyToData,
     };
     dbService.sendMessage(messageData);
-  }, [user]);
+    setReplyingTo(null);
+  }, [user, replyingTo]);
 
   const uploadAndSendMessage = useCallback(async (file: File) => {
     if(!user) return;
@@ -142,11 +157,13 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
     onlineUsers,
     typingUsers,
     status,
+    replyingTo,
     saveUserProfile,
     sendMessage,
     uploadAndSendMessage,
     setTyping,
-  }), [user, messages, onlineUsers, typingUsers, status, saveUserProfile, sendMessage, uploadAndSendMessage, setTyping]);
+    setReplyingTo,
+  }), [user, messages, onlineUsers, typingUsers, status, replyingTo, saveUserProfile, sendMessage, uploadAndSendMessage, setTyping]);
 
   return (
     <ChatContext.Provider value={contextValue}>
