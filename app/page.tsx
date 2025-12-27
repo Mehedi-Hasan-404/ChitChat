@@ -1,86 +1,37 @@
 // app/page.tsx
-
 'use client';
 
-import { ChatHeader } from '@/components/chat/ChatHeader';
-import { ChatInput } from '@/components/chat/ChatInput';
-import { ChatMessages } from '@/components/chat/ChatMessages';
-import { TypingIndicator } from '@/components/chat/TypingIndicator';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/Dialog';
-import { useChat } from '@/lib/hooks/useChat';
-import { FormEvent, useState } from 'react';
+import { useAuth } from './contexts/AuthContext';
+import { ChatHeader } from './components/chat/ChatHeader';
+import { MessageList } from './components/chat/MessageList';
+import { MessageInput } from './components/chat/MessageInput';
+import { OnlineUsers } from './components/chat/OnlineUsers';
 
-const ProfileCreationDialog = () => {
-    const { saveUserProfile } = useChat();
-    const [name, setName] = useState('');
-    const [picUrl, setPicUrl] = useState('');
-    
-    const handleSubmit = (e: FormEvent) => {
-        e.preventDefault();
-        if (name.trim()) {
-            saveUserProfile(name.trim(), picUrl.trim());
-        } else {
-            alert('Please enter a display name.');
-        }
-    };
-    
+export default function Home() {
+  const { loading } = useAuth();
+
+  if (loading) {
     return (
-        <Dialog open={true}>
-            <DialogContent className="sm:max-w-md" onInteractOutside={(e) => e.preventDefault()}>
-                <DialogHeader>
-                    <DialogTitle>Create Your Profile</DialogTitle>
-                </DialogHeader>
-                <form onSubmit={handleSubmit} className="space-y-6 mt-4">
-                    <div>
-                        <label htmlFor="name-input" className="block mb-2 font-medium text-text-dark dark:text-dark-text-dark">Display Name</label>
-                        <input
-                            id="name-input"
-                            type="text"
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
-                            placeholder="e.g., Alex Doe"
-                            required
-                            className="w-full p-3 border border-border-color dark:border-dark-border-color rounded-medium bg-bg-light dark:bg-dark-bg-light focus:ring-2 focus:ring-primary dark:focus:ring-dark-primary outline-none text-text-dark dark:text-dark-text-dark"
-                        />
-                    </div>
-                    <div>
-                        <label htmlFor="profile-pic-url" className="block mb-2 font-medium text-text-dark dark:text-dark-text-dark">Profile Picture URL (Optional)</label>
-                        <input
-                            id="profile-pic-url"
-                            type="text"
-                            value={picUrl}
-                            onChange={(e) => setPicUrl(e.target.value)}
-                            placeholder="Paste image URL here"
-                            className="w-full p-3 border border-border-color dark:border-dark-border-color rounded-medium bg-bg-light dark:bg-dark-bg-light focus:ring-2 focus:ring-primary dark:focus:ring-dark-primary outline-none text-text-dark dark:text-dark-text-dark"
-                        />
-                    </div>
-                    <button type="submit" className="w-full py-3 text-white font-semibold rounded-medium bg-primary hover:bg-primary-hover dark:bg-dark-primary dark:hover:bg-dark-primary-hover transition-all shadow-light hover:shadow-medium hover:-translate-y-0.5">
-                        Save and Join Chat
-                    </button>
-                </form>
-            </DialogContent>
-        </Dialog>
-    );
-};
-
-export default function ChatPage() {
-    const { user } = useChat();
-
-    // The profile dialog is shown if the user object doesn't exist
-    if (!user) {
-        return <ProfileCreationDialog />;
-    }
-
-    return (
-        <div className="fixed inset-0 w-full h-full bg-gradient-to-br from-gray-100 to-gray-300 dark:from-gray-800 dark:to-gray-900">
-            <div className="h-full w-full flex items-center justify-center p-0 sm:p-4">
-                <div className="flex flex-col w-full h-full sm:h-[95vh] sm:max-h-[900px] sm:max-w-md bg-bg-main dark:bg-dark-bg-main shadow-heavy sm:rounded-3xl overflow-hidden">
-                    <ChatHeader />
-                    <ChatMessages />
-                    <TypingIndicator />
-                    <ChatInput />
-                </div>
-            </div>
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
         </div>
+      </div>
     );
+  }
+
+  return (
+    <div className="flex h-screen bg-gray-100">
+      {/* Main Chat Area */}
+      <div className="flex-1 flex flex-col">
+        <ChatHeader />
+        <MessageList />
+        <MessageInput />
+      </div>
+
+      {/* Sidebar - Online Users */}
+      <OnlineUsers />
+    </div>
+  );
 }
