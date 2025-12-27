@@ -1,47 +1,48 @@
 // lib/types.ts
 
-export interface UserProfile {
-  name: string;
-  pic: string;
-  sessionId: string;
-}
-
-export interface ReplyTo {
-  id: string;
-  text: string;
-  sender: {
-    name: string;
-    pic: string;
-  };
-}
-
 export interface Message {
   id: string;
-  text: string;
+  content: string;
+  userId: string;
+  userName: string;
   timestamp: number;
-  sender: {
-    name: string;
-    pic: string;
-  };
-  sessionId: string;
-  replyTo?: ReplyTo;
 }
 
-export interface TypingUser {
+export interface UserProfile {
+  id: string;
   name: string;
-  sessionId: string;
+  email: string;
+  avatarUrl?: string;
+  lastSeen?: number;
 }
 
 export interface OnlineUser {
+  id: string;
   name: string;
-  sessionId: string;
+  lastSeen: number;
+}
+
+export interface TypingUser {
+  id: string;
+  name: string;
+  isTyping: boolean;
 }
 
 export interface ChatService {
-  init(onMessages: (messages: Message[]) => void, onOnlineUsers: (users: OnlineUser[]) => void, onTypingUsers: (users: TypingUser[]) => void): void;
-  sendMessage(message: Omit<Message, 'id' | 'timestamp'>): Promise<void>;
-  uploadImage(file: File): Promise<string>;
-  setTypingStatus(user: UserProfile, isTyping: boolean): void;
-  setupPresence(user: UserProfile): void;
-  cleanup(): void;
+  // Message operations
+  sendMessage(message: Message): Promise<void>;
+  subscribeToMessages(callback: (messages: Message[]) => void): () => void;
+  
+  // User profile operations
+  createOrUpdateUserProfile(profile: UserProfile): Promise<void>;
+  getUserProfile(userId: string): Promise<UserProfile | null>;
+  
+  // Online status operations
+  setUserOnline(userId: string, userName: string): Promise<void>;
+  setUserOffline(userId: string): Promise<void>;
+  subscribeToOnlineUsers(callback: (users: OnlineUser[]) => void): () => void;
+  
+  // Typing indicator operations
+  setUserTyping(userId: string, userName: string, isTyping: boolean): Promise<void>;
+  subscribeToTypingUsers(callback: (users: TypingUser[]) => void): () => void;
 }
