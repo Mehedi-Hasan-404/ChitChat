@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, FormEvent } from 'react';
-import { useAuth } from '@/app/contexts/AuthContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { useChat } from '../providers/ChatProvider';
 import { LogOut, Settings, X } from 'lucide-react';
 
@@ -62,7 +62,7 @@ export function ChatHeader() {
                     <button
                         onClick={signOut}
                         className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-                        title="Sign out"
+                        title="New Identity"
                     >
                         <LogOut className="w-5 h-5 text-gray-600" />
                     </button>
