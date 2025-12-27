@@ -5,7 +5,7 @@
 import { useChat } from '@/lib/hooks/useChat';
 import { ThemeToggle } from '../ui/ThemeToggle';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../ui/Dialog';
-import { FormEvent, useState } from 'react';
+import { FormEvent, useState, useEffect } from 'react';
 import { sanitizeProfilePicUrl, sanitizeName, sanitizeCssUrl } from '@/lib/security/sanitize';
 
 const ProfileEditor = ({ onClose }: { onClose: () => void }) => {
@@ -25,7 +25,6 @@ const ProfileEditor = ({ onClose }: { onClose: () => void }) => {
             return;
         }
         
-        // Sanitize profile picture URL
         const sanitizedPic = picUrl.trim() ? sanitizeProfilePicUrl(picUrl.trim()) : '';
         
         if (picUrl.trim() && !sanitizedPic) {
@@ -56,11 +55,8 @@ const ProfileEditor = ({ onClose }: { onClose: () => void }) => {
                     placeholder="e.g., Alex Doe"
                     required
                     maxLength={50}
-                    className="w-full p-3 border border-border-color dark:border-dark-border-color rounded-medium bg-bg-light dark:bg-dark-bg-light focus:ring-2 focus:ring-primary dark:focus:ring-dark-primary outline-none"
+                    className="w-full p-3 border border-border-color dark:border-dark-border-color rounded-medium bg-bg-light dark:bg-dark-bg-light focus:ring-2 focus:ring-primary dark:focus:ring-dark-primary outline-none text-text-dark dark:text-dark-text-dark"
                 />
-                <p className="text-xs text-text-secondary dark:text-dark-text-secondary mt-1">
-                    Max 50 characters
-                </p>
             </div>
             <div>
                 <label htmlFor="profile-pic-url" className="block mb-2 font-medium text-text-dark dark:text-dark-text-dark">
@@ -73,11 +69,8 @@ const ProfileEditor = ({ onClose }: { onClose: () => void }) => {
                     onChange={(e) => setPicUrl(e.target.value)}
                     placeholder="https://example.com/image.jpg"
                     maxLength={500}
-                    className="w-full p-3 border border-border-color dark:border-dark-border-color rounded-medium bg-bg-light dark:bg-dark-bg-light focus:ring-2 focus:ring-primary dark:focus:ring-dark-primary outline-none"
+                    className="w-full p-3 border border-border-color dark:border-dark-border-color rounded-medium bg-bg-light dark:bg-dark-bg-light focus:ring-2 focus:ring-primary dark:focus:ring-dark-primary outline-none text-text-dark dark:text-dark-text-dark"
                 />
-                <p className="text-xs text-text-secondary dark:text-dark-text-secondary mt-1">
-                    Only http/https URLs are allowed
-                </p>
             </div>
             <button 
                 type="submit" 
@@ -92,16 +85,28 @@ const ProfileEditor = ({ onClose }: { onClose: () => void }) => {
 export const ChatHeader = () => {
     const { user, onlineUsers, status } = useChat();
     const [isProfileOpen, setProfileOpen] = useState(false);
+    const [showDebug, setShowDebug] = useState(false);
     
     const onlineCount = onlineUsers.length;
     let onlineStatusText = 'Connecting...';
+    let statusColor = 'text-yellow-500';
+    
     if(status === 'connected') {
         onlineStatusText = `${onlineCount} user${onlineCount !== 1 ? 's' : ''} online`;
+        statusColor = 'text-green-500';
     } else if (status === 'error') {
         onlineStatusText = 'Connection Failed';
+        statusColor = 'text-red-500';
     }
 
-    // Secure profile picture style
+    // Show debug info if connection fails
+    useEffect(() => {
+        if (status === 'error') {
+            console.error('❌ Connection Error - Check console for details');
+            setShowDebug(true);
+        }
+    }, [status]);
+
     const getProfilePicStyle = (picUrl: string | undefined) => {
         if (!picUrl) return {};
         const sanitized = sanitizeCssUrl(picUrl);
@@ -116,7 +121,7 @@ export const ChatHeader = () => {
 
     const ProfileAvatar = () => (
         <div 
-            className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg text-text-dark dark:text-dark-text-dark bg-amber-400 shadow-light border-2 border-white cursor-pointer transition-transform hover:scale-105"
+            className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg text-white bg-gradient-to-br from-amber-400 to-orange-500 shadow-light border-2 border-white dark:border-gray-700 cursor-pointer transition-transform hover:scale-105"
             style={getProfilePicStyle(user?.pic)}
         >
             {!user?.pic && (user?.name?.charAt(0) || 'U').toUpperCase()}
@@ -124,30 +129,58 @@ export const ChatHeader = () => {
     );
 
     return (
-        <header className="flex-shrink-0 flex items-center p-3 sm:p-4 border-b border-border-color dark:border-dark-border-color bg-bg-main dark:bg-dark-bg-main shadow-sm">
-            <Dialog open={isProfileOpen} onOpenChange={setProfileOpen}>
-                <DialogTrigger asChild>
-                    <button aria-label="Edit profile">
-                        <ProfileAvatar />
-                    </button>
-                </DialogTrigger>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Edit Your Profile</DialogTitle>
-                    </DialogHeader>
-                    <ProfileEditor onClose={() => setProfileOpen(false)} />
-                </DialogContent>
-            </Dialog>
+        <>
+            <header className="flex-shrink-0 flex items-center p-3 sm:p-4 border-b border-border-color dark:border-dark-border-color bg-bg-main dark:bg-dark-bg-main shadow-sm">
+                <Dialog open={isProfileOpen} onOpenChange={setProfileOpen}>
+                    <DialogTrigger asChild>
+                        <button aria-label="Edit profile">
+                            <ProfileAvatar />
+                        </button>
+                    </DialogTrigger>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Edit Your Profile</DialogTitle>
+                        </DialogHeader>
+                        <ProfileEditor onClose={() => setProfileOpen(false)} />
+                    </DialogContent>
+                </Dialog>
 
-            <div className="flex-grow mx-3 overflow-hidden">
-                <h2 className="text-lg font-semibold truncate text-text-dark dark:text-dark-text-dark">
-                    ChatKat by Mehedi
-                </h2>
-                <p className="text-sm font-medium text-text-secondary dark:text-dark-text-secondary">
-                    {onlineStatusText}
-                </p>
-            </div>
-            <ThemeToggle />
-        </header>
+                <div className="flex-grow mx-3 overflow-hidden">
+                    <h2 className="text-lg font-semibold truncate text-text-dark dark:text-dark-text-dark">
+                        ChatKat by Mehedi
+                    </h2>
+                    <p className={`text-sm font-medium ${statusColor}`}>
+                        {onlineStatusText}
+                        {status === 'error' && (
+                            <button 
+                                onClick={() => window.location.reload()}
+                                className="ml-2 text-xs underline text-primary dark:text-dark-primary"
+                            >
+                                Retry
+                            </button>
+                        )}
+                    </p>
+                </div>
+                <ThemeToggle />
+            </header>
+            
+            {/* Debug Info Banner */}
+            {showDebug && status === 'error' && (
+                <div className="bg-red-100 dark:bg-red-900/30 border-b border-red-300 dark:border-red-700 p-3 text-sm">
+                    <p className="text-red-800 dark:text-red-300 font-semibold mb-1">
+                        🔴 Connection Error
+                    </p>
+                    <p className="text-red-700 dark:text-red-400 text-xs mb-2">
+                        Check browser console (F12) for details, or verify your environment variables are set correctly.
+                    </p>
+                    <button 
+                        onClick={() => setShowDebug(false)}
+                        className="text-xs text-red-600 dark:text-red-400 underline"
+                    >
+                        Dismiss
+                    </button>
+                </div>
+            )}
+        </>
     );
 };
