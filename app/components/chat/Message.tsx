@@ -1,3 +1,4 @@
+
 // components/chat/Message.tsx
 
 'use client';
@@ -6,6 +7,7 @@ import { Message as MessageType, UserProfile } from '@/lib/types';
 import { format } from 'date-fns';
 import { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
+import { sanitizeUrl, sanitizeImageUrl, sanitizeCssUrl } from '@/lib/security/sanitize';
 
 interface MessageProps {
   message: MessageType;
@@ -22,8 +24,14 @@ export const Message = ({ message, currentUser, onReply }: MessageProps) => {
   const startX = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const urlPattern = /(\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig;
-  const imageRegex = /^(https?:\/\/.*\.(?:png|jpg|jpeg|gif|webp))/i;
+  // Strict URL pattern - only http/https
+  const urlPattern = /\b(https?:\/\/[^\s<>"{}|\\^`\[\]]+)/gi;
+  
+  // Strict image URL validation
+  const isImageUrl = (url: string): boolean => {
+    const sanitized = sanitizeImageUrl(url);
+    return sanitized !== '' && sanitized === url;
+  };
 
   const handleTouchStart = (e: React.TouchEvent) => {
     startX.current = e.touches[0].clientX;
@@ -59,28 +67,6 @@ export const Message = ({ message, currentUser, onReply }: MessageProps) => {
     setIsDragging(true);
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging) return;
-    const diff = e.clientX - startX.current;
-    
-    if (isSent && diff < 0) {
-      setSwipeOffset(Math.max(diff, -80));
-    } else if (!isSent && diff > 0) {
-      setSwipeOffset(Math.min(diff, 80));
-    }
-  };
-
-  const handleMouseUp = () => {
-    setIsDragging(false);
-    const threshold = 60;
-    
-    if (Math.abs(swipeOffset) > threshold) {
-      onReply(message);
-    }
-    
-    setSwipeOffset(0);
-  };
-
   useEffect(() => {
     if (isDragging) {
       const handleGlobalMouseMove = (e: MouseEvent) => {
@@ -112,16 +98,95 @@ export const Message = ({ message, currentUser, onReply }: MessageProps) => {
   }, [isDragging, swipeOffset, isSent, message, onReply]);
 
   const renderContent = () => {
-    if (imageRegex.test(message.text)) {
-      // eslint-disable-next-line @next/next/no-img-element
-      return <img src={message.text} alt="User content" className="max-w-full rounded-medium mt-1.5 cursor-pointer" onClick={() => window.open(message.text, '_blank')} />;
+    const text = message.text || '';
+    
+    // Check if the entire message is an image URL
+    if (isImageUrl(text)) {
+      const sanitizedUrl = sanitizeImageUrl(text);
+      if (sanitizedUrl) {
+        return (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img 
+            src={sanitizedUrl} 
+            alt="User shared image" 
+            className="max-w-full rounded-medium mt-1.5 cursor-pointer" 
+            onClick={() => {
+              const safe = sanitizeUrl(text);
+              if (safe) window.open(safe, '_blank', 'noopener,noreferrer');
+            }}
+            onError={(e) => {
+              // Fallback if image fails to load
+              e.currentTarget.style.display = 'none';
+            }}
+          />
+        );
+      }
     }
-    const parts = message.text.split(urlPattern);
-    return parts.map((part, index) => 
-        urlPattern.test(part) 
-            ? <a key={index} href={part} target="_blank" rel="noopener noreferrer" className="underline">{part}</a> 
-            : <span key={index}>{part}</span>
-    );
+    
+    // Split text by URLs and render
+    const parts = text.split(urlPattern);
+    const matches = text.match(urlPattern) || [];
+    
+    const result: JSX.Element[] = [];
+    let matchIndex = 0;
+    
+    parts.forEach((part, index) => {
+      if (part) {
+        // Add text part (escaped)
+        result.push(
+          <span key={`text-${index}`}>{part}</span>
+        );
+      }
+      
+      // Add URL part if exists
+      if (matchIndex < matches.length) {
+        const url = matches[matchIndex];
+        const sanitized = sanitizeUrl(url);
+        
+        if (sanitized) {
+          result.push(
+            <a 
+              key={`link-${index}`}
+              href={sanitized}
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="underline break-all"
+              onClick={(e) => {
+                // Additional safety check on click
+                e.preventDefault();
+                const safe = sanitizeUrl(url);
+                if (safe) {
+                  window.open(safe, '_blank', 'noopener,noreferrer');
+                }
+              }}
+            >
+              {url}
+            </a>
+          );
+        } else {
+          // If URL is not safe, render as plain text
+          result.push(
+            <span key={`unsafe-${index}`} className="text-red-500">[Invalid URL]</span>
+          );
+        }
+        matchIndex++;
+      }
+    });
+    
+    return result.length > 0 ? result : <span>{text}</span>;
+  };
+
+  // Sanitize profile picture URL
+  const getProfilePicStyle = (picUrl: string | undefined) => {
+    if (!picUrl) return {};
+    const sanitized = sanitizeCssUrl(picUrl);
+    if (!sanitized) return {};
+    
+    return {
+      backgroundImage: `url('${sanitized}')`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center'
+    };
   };
 
   return (
@@ -156,8 +221,9 @@ export const Message = ({ message, currentUser, onReply }: MessageProps) => {
             </div>
 
             {!isSent && (
-                <div className="w-8 h-8 rounded-full flex-shrink-0 mr-2 flex items-center justify-center text-sm font-medium bg-gray-300 shadow-light"
-                     style={{ backgroundImage: `url(${message.sender.pic})`, backgroundSize: 'cover', backgroundPosition: 'center' }}
+                <div 
+                  className="w-8 h-8 rounded-full flex-shrink-0 mr-2 flex items-center justify-center text-sm font-medium bg-gray-300 shadow-light"
+                  style={getProfilePicStyle(message.sender.pic)}
                 >
                     {!message.sender.pic && (message.sender.name?.charAt(0) || '?').toUpperCase()}
                 </div>
@@ -166,12 +232,20 @@ export const Message = ({ message, currentUser, onReply }: MessageProps) => {
                 {/* Reply preview */}
                 {message.replyTo && (
                   <div className={`mb-2 pb-2 border-l-4 pl-2 text-xs opacity-70 ${isSent ? 'border-white' : 'border-primary dark:border-dark-primary'}`}>
-                    <div className="font-semibold">{message.replyTo.sender.name}</div>
-                    <div className="truncate max-w-[250px]">{message.replyTo.text}</div>
+                    <div className="font-semibold">
+                      {message.replyTo.sender.name || 'Unknown'}
+                    </div>
+                    <div className="truncate max-w-[250px]">
+                      {message.replyTo.text || ''}
+                    </div>
                   </div>
                 )}
                 
-                {!isSent && <div className="text-sm font-semibold text-primary dark:text-dark-primary mb-1">{message.sender.name || 'Anonymous'}</div>}
+                {!isSent && (
+                  <div className="text-sm font-semibold text-primary dark:text-dark-primary mb-1">
+                    {message.sender.name || 'Anonymous'}
+                  </div>
+                )}
                 <div className="text-base break-words">
                     {renderContent()}
                 </div>
