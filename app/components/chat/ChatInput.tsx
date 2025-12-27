@@ -3,7 +3,6 @@
 'use client';
 
 import { useChat } from '@/lib/hooks/useChat';
-import Image from 'next/image';
 import { useState, useRef, ChangeEvent } from 'react';
 
 export const ChatInput = () => {
@@ -105,7 +104,16 @@ export const ChatInput = () => {
                             className="ml-2 p-1 rounded-full hover:bg-bg-main dark:hover:bg-dark-bg-main transition-colors"
                             aria-label="Cancel reply"
                         >
-                            <Image src="/icons/close.svg" alt="Cancel" width={16} height={16} />
+                            <svg 
+                              xmlns="http://www.w3.org/2000/svg" 
+                              fill="none" 
+                              viewBox="0 0 24 24" 
+                              strokeWidth="1.5" 
+                              stroke="currentColor"
+                              className="w-4 h-4 text-text-dark dark:text-dark-text-dark"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
                         </button>
                     </div>
                 </div>
@@ -127,7 +135,16 @@ export const ChatInput = () => {
                         aria-label="Attach image"
                         title="Upload image (Max 5MB)"
                     >
-                        <Image src="/icons/attachment.svg" alt="Attach" width={20} height={20} />
+                        <svg 
+                          xmlns="http://www.w3.org/2000/svg" 
+                          fill="none" 
+                          viewBox="0 0 24 24" 
+                          strokeWidth="1.5" 
+                          stroke="currentColor"
+                          className="w-5 h-5"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.122 2.122l7.81-7.81" />
+                        </svg>
                     </button>
                     <input
                         type="text"
@@ -144,7 +161,16 @@ export const ChatInput = () => {
                         className="w-10 h-10 flex-shrink-0 flex items-center justify-center rounded-full bg-primary text-white transition-all enabled:hover:scale-105 enabled:hover:bg-primary-hover disabled:bg-text-secondary disabled:cursor-not-allowed"
                         aria-label="Send message"
                     >
-                        <Image src="/icons/send.svg" alt="Send" width={20} height={20} />
+                        <svg 
+                          xmlns="http://www.w3.org/2000/svg" 
+                          fill="none" 
+                          viewBox="0 0 24 24" 
+                          strokeWidth="1.5" 
+                          stroke="currentColor"
+                          className="w-5 h-5"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
+                        </svg>
                     </button>
                 </div>
                 <div className="text-xs text-text-secondary dark:text-dark-text-secondary mt-2 text-center">
