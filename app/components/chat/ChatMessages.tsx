@@ -7,7 +7,7 @@ import { Message } from './Message';
 import { useEffect, useRef } from 'react';
 
 export const ChatMessages = () => {
-  const { messages, user } = useChat();
+  const { messages, user, setReplyingTo } = useChat();
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -23,7 +23,12 @@ export const ChatMessages = () => {
   return (
     <div ref={scrollRef} className="flex-grow overflow-y-auto p-4 bg-bg-light dark:bg-dark-bg-light">
       {messages.map(msg => (
-        <Message key={msg.id} message={msg} currentUser={user} />
+        <Message 
+          key={msg.id} 
+          message={msg} 
+          currentUser={user}
+          onReply={setReplyingTo}
+        />
       ))}
     </div>
   );
