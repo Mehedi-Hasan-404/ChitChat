@@ -44,56 +44,79 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    // Check if user exists in localStorage
-    let storedUserId = localStorage.getItem('chitchat_user_id');
-    let storedUsername = localStorage.getItem('chitchat_username');
-
-    if (!storedUserId || !storedUsername) {
-      // Create new anonymous user
-      storedUserId = generateUserId();
-      storedUsername = generateUsername();
-      localStorage.setItem('chitchat_user_id', storedUserId);
-      localStorage.setItem('chitchat_username', storedUsername);
+    // Immediately set loading to false if we're on server
+    if (typeof window === 'undefined') {
+      setLoading(false);
+      return;
     }
 
-    const anonymousUser: User = {
-      uid: storedUserId,
-      displayName: storedUsername,
-      email: `${storedUserId}@anonymous.local`,
-    };
+    try {
+      // Check if user exists in localStorage
+      let storedUserId = localStorage.getItem('chitchat_user_id');
+      let storedUsername = localStorage.getItem('chitchat_username');
 
-    setUser(anonymousUser);
-    setLoading(false);
+      if (!storedUserId || !storedUsername) {
+        // Create new anonymous user
+        storedUserId = generateUserId();
+        storedUsername = generateUsername();
+        localStorage.setItem('chitchat_user_id', storedUserId);
+        localStorage.setItem('chitchat_username', storedUsername);
+      }
 
-    // Create/update user profile
-    chatService.createOrUpdateUserProfile({
-      id: anonymousUser.uid,
-      name: anonymousUser.displayName,
-      email: anonymousUser.email,
-    });
+      const anonymousUser: User = {
+        uid: storedUserId,
+        displayName: storedUsername,
+        email: `${storedUserId}@anonymous.local`,
+      };
 
-    // Set user as online
-    chatService.setUserOnline(anonymousUser.uid, anonymousUser.displayName);
+      setUser(anonymousUser);
+      setLoading(false);
 
-    // Set up heartbeat to maintain online status
-    const heartbeatInterval = setInterval(() => {
-      chatService.setUserOnline(anonymousUser.uid, anonymousUser.displayName);
-    }, 30000); // Every 30 seconds
+      // Initialize user in chat service asynchronously
+      (async () => {
+        try {
+          // Create/update user profile
+          await chatService.createOrUpdateUserProfile({
+            id: anonymousUser.uid,
+            name: anonymousUser.displayName,
+            email: anonymousUser.email,
+          });
 
-    // Cleanup on unmount
-    return () => {
-      clearInterval(heartbeatInterval);
-      chatService.setUserOffline(anonymousUser.uid);
-    };
+          // Set user as online
+          await chatService.setUserOnline(anonymousUser.uid, anonymousUser.displayName);
+        } catch (error) {
+          console.error('Error initializing user:', error);
+        }
+      })();
+
+      // Set up heartbeat to maintain online status
+      const heartbeatInterval = setInterval(() => {
+        chatService.setUserOnline(anonymousUser.uid, anonymousUser.displayName).catch(err => {
+          console.error('Heartbeat error:', err);
+        });
+      }, 30000); // Every 30 seconds
+
+      // Cleanup on unmount
+      return () => {
+        clearInterval(heartbeatInterval);
+        chatService.setUserOffline(anonymousUser.uid).catch(err => {
+          console.error('Error setting user offline:', err);
+        });
+      };
+    } catch (error) {
+      console.error('Error in AuthProvider:', error);
+      // Even if there's an error, stop loading
+      setLoading(false);
+    }
   }, []);
 
   const signOut = async () => {
-    if (user) {
-      await chatService.setUserOffline(user.uid);
-      localStorage.removeItem('chitchat_user_id');
-      localStorage.removeItem('chitchat_username');
+    try {
+      if (user) {
+        await chatService.setUserOffline(user.uid);
+        localStorage.removeItem('chitchat_user_id');
+        localStorage.removeItem('chitchat_username');
+      }
       
       // Generate new user
       const newUserId = generateUserId();
@@ -108,7 +131,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       };
       
       setUser(newUser);
-      await chatService.setUserOnline(newUser.uid, newUser.displayName);
+      
+      // Set new user online asynchronously
+      chatService.setUserOnline(newUser.uid, newUser.displayName).catch(err => {
+        console.error('Error setting new user online:', err);
+      });
+    } catch (error) {
+      console.error('Error in signOut:', error);
     }
   };
 
