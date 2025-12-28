@@ -34,14 +34,20 @@ let app: FirebaseApp;
 let auth: Auth;
 let database: Database;
 
+// Initialize Firebase only on client side
 if (typeof window !== 'undefined') {
-  if (!getApps().length) {
-    app = initializeApp(firebaseConfig);
-  } else {
-    app = getApps()[0];
+  try {
+    if (!getApps().length) {
+      app = initializeApp(firebaseConfig);
+    } else {
+      app = getApps()[0];
+    }
+    auth = getAuth(app);
+    database = getDatabase(app);
+    console.log('Firebase initialized successfully');
+  } catch (error) {
+    console.error('Firebase initialization error:', error);
   }
-  auth = getAuth(app);
-  database = getDatabase(app);
 }
 
 export const firebaseService: ChatService = {
