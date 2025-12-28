@@ -1,36 +1,30 @@
 // app/layout.tsx
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+import "./globals.css";
+import { AuthProvider } from "./contexts/AuthContext";
+import { ChatProvider } from "./components/providers/ChatProvider";
 
-import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
-import './globals.css';
-import { ThemeProvider } from '@/components/providers/ThemeProvider';
-import { ChatProvider } from '@/components/providers/ChatProvider';
-
-const inter = Inter({ subsets: ['latin'] });
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'ChatKat by Mehedi',
-  description: 'A real-time chat application built with Next.js',
+  title: "ChitChat - Anonymous Chat",
+  description: "Chat anonymously with others in real-time",
 };
 
 export default function RootLayout({
   children,
-}: {
+}: Readonly<{
   children: React.ReactNode;
-}) {
+}>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en">
       <body className={inter.className}>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
+        <AuthProvider>
           <ChatProvider>
             {children}
           </ChatProvider>
-        </ThemeProvider>
+        </AuthProvider>
       </body>
     </html>
   );
